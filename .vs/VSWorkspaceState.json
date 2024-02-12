@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\src",
+    "\\src\\dpm",
+    "\\src\\processors",
+    "\\tmp_data"
+  ],
+  "SelectedNode": "\\src\\processors\\logs_parser.py",
+  "PreviewInSolutionExplorer": false
+}
