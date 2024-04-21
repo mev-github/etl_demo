@@ -3,36 +3,42 @@ version: '3.8'
 services:
   jenkins:
     image: jenkins/jenkins:lts
+    user: root
     ports:
-      - "8088:8080"
-      - "50008:50000"
+      - "8080:8080"
+      - "50000:50000"
     volumes:
       - jenkins_data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker  # Ensure Docker binary is available in Jenkins container
+      - /home/$USER:/home  # This will mount the user's home directory, adjust if necessary
     environment:
-      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
-
-  mysql:
-    image: mysql:latest
-    ports:
-      - "3308:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: admin
-      MYSQL_DATABASE: jenkins
-      MYSQL_USER: admin
-      MYSQL_PASSWORD: admin
-    volumes:
-      - mysql_data:/var/lib/mysql
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
 
   app:
-    build: ./
+    build: .
+    volumes:
+      - ./local_data:/app/local_data
     depends_on:
       - mysql
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: admin
-      MYSQL_PASSWORD: admin
-      MYSQL_DATABASE: jenkins
+      MYSQL_USER: etl_test_user
+      MYSQL_PASSWORD: etl_test_pass
+      MYSQL_DB: etl_demo_mysql
+
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: etl_demo_mysql
+      MYSQL_USER: etl_test_user
+      MYSQL_PASSWORD: etl_test_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./config/init_mysql.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   jenkins_data:

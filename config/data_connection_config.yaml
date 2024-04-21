@@ -1,0 +1,19 @@
+mysql:
+  user: etl_test_user
+  password: etl_test_pass
+  host: localhost
+  port: 3306
+  database: etl_demo_mysql
+mssql:
+  user: root
+  password: root
+  host: localhost
+  port: 1433
+  database: etl_demo_mssql
+  driver: 'ODBC Driver 17 for SQL Server'
+postgresql:
+  user: root
+  password: root
+  host: localhost
+  port: 5432
+  database: etl_demo_postgresql

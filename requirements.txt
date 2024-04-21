@@ -1,6 +1,9 @@
 pandas
-Pyarrow
-numpy
 sqlalchemy
-PyMySQL
+argparse
+pyyaml
+pymysql
 pyodbc
+tabulate
+pyarrow
+fastparquet

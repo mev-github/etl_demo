@@ -1,65 +1,77 @@
 import argparse
-import pandas as pd
-from dpm.file_helper import FileHelper
-from dpm.database_helper import DatabaseHelper
-from processors.logs_parser import LogsParser
+import logging
+
+import yaml
+from tabulate import tabulate
+
+from dpu.data_processor import DataProcessor
+from dpu.data_reader import DataReader
+from dpu.data_writer import DataWriter
 
 
-# def insert_unique_action_type(db_helper, action_type):
-#     # Check if the action_type already exists
-#     existing = db_helper.read_from_db('mysql',
-#                                       f"SELECT action_type_id FROM action_types WHERE action_type = '{action_type}'")
-#     if existing.empty:
-#         # Insert new action type if not exists
-#         new_df = pd.DataFrame({'action_type': [action_type]})
-#         db_helper.write_to_db('mysql', new_df, 'action_types', if_exists='append')
-#         # Fetch the newly inserted action_type_id
-#         existing = db_helper.read_from_db('mysql',
-#                                           f"SELECT action_type_id FROM action_types WHERE action_type = '{action_type}'")
-#     return existing.iloc[0]['action_type_id']
+class DataProcessing:
+    def __init__(self, config_path='config/settings.yaml'):
+        self.config_path = config_path
+        self._settings = self.load_settings()
+        self._args = self.parse_arguments()
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+    def load_settings(self):
+        with open(self.config_path, 'r') as file:
+            settings = yaml.safe_load(file)
+        return settings
 
-def logs_parsing_pipeline():
-    print("Running logs parsing pipeline...")
-    # db_helper = DatabaseHelper()
-    # db_helper.connect_mysql(host='localhost', port='3308', user='admin', password='admin', db='jenkins')
+    def parse_arguments(self):
+        parser = argparse.ArgumentParser(description='Data Processing Script')
+        parser.add_argument('-r', '--read', help='Source type (file or table)')
+        parser.add_argument('-rt', '--read_type', help='Source file format or database type')
+        parser.add_argument('-rn', '--read_name', help='File path or table name')
+        parser.add_argument('-w', '--write', help='Destination type (file or table)')
+        parser.add_argument('-wt', '--write_type', help='Destination file format or database type')
+        parser.add_argument('-wn', '--write_name', help='File path or table name')
+        args = parser.parse_args()
 
-    csv_file_path = 'E:/Data/IDEA/etl_demo/tmp_data/4test.csv'
-    df = FileHelper.read_csv(csv_file_path)
+        # Override defaults with any command-line arguments provided
+        if args.read:
+            self._settings['source']['type'] = args.read
+        if args.read_type:
+            self._settings['source']['format'] = args.read_type
+        if args.read_name:
+            self._settings['source']['name'] = args.read_name
+        if args.write:
+            self._settings['destination']['type'] = args.write
+        if args.write_type:
+            self._settings['destination']['format'] = args.write_type
+        if args.write_name:
+            self._settings['destination']['name'] = args.write_name
 
-    for _, row in df.iterrows():
-        parsed_log = LogsParser.parse_log(row['raw_str'])
-        # action_type_id = insert_unique_action_type(db_helper, row['action_type'])
+        return args
 
-        log_entry = pd.DataFrame({
-            'timestamp': [row['timestamp']],
-            'user_id': [row['user_id']],
-            # 'action_type_id': [action_type_id],
-            'action_count': [row['action_count']],
-            'parsed': [parsed_log]
-        })
-        print(log_entry.to_string(index=False))
-        # db_helper.write_to_db('mysql', log_entry, 'activity_logs', if_exists='append')
+    def run(self):
+        try:
+            logging.info("Reading data...")
+            reader = DataReader()
+            df = reader.read_data(self._settings['source']['type'], self._settings['source']['format'],
+                                  self._settings['source']['name'])
 
+            logging.info("Cleaning and filtering data...")
+            processor = DataProcessor()
+            filtered_df = processor.process_data(df)
 
-def user_registration_pipeline():
-    print("Running user registration pipeline...")
-    # Placeholder for user registration processing logic
+            if 'type' not in self._settings['destination'] or self._settings['destination']['type'] is None:
+                logging.info(tabulate(filtered_df.head(5), headers='keys', tablefmt='psql'))
+                logging.info("Process completed successfully.")
+                return
 
+            logging.info("Writing data...")
+            writer = DataWriter()
+            writer.write_data(filtered_df, self._settings['destination']['type'],
+                              self._settings['destination']['format'], self._settings['destination']['name'])
+            logging.info(f"Process completed successfully for rows: {len(filtered_df)}")
 
-def main():
-    parser = argparse.ArgumentParser(description="Run specific data processing pipelines.")
-    parser.add_argument('--pipeline', type=str, help='The name of the pipeline to run')
-
-    args = parser.parse_args()
-
-    if args.pipeline == 'logs':
-        logs_parsing_pipeline()
-    elif args.pipeline == 'registration':
-        user_registration_pipeline()
-    else:
-        print("Unknown pipeline. Please specify a valid pipeline name.")
-
+        except Exception as e:
+            logging.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    main()
+    data_processing = DataProcessing()
+    data_processing.run()
