@@ -1,9 +1,0 @@
-pandas
-sqlalchemy
-argparse
-pyyaml
-pymysql
-pyodbc
-tabulate
-pyarrow
-fastparquet
