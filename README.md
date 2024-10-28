@@ -1,23 +1,25 @@
-# ETL Pipeline with Apache Airflow
+# ETL Pipeline with Apache Airflow and Docker
 
-This project implements an ETL (Extract, Transform, Load) pipeline using Apache Airflow. The pipeline extracts data from PostgreSQL and MongoDB databases, as well as local CSV or JSON files, transforms the data, and loads it into a MySQL database. All components are containerized using Docker, ensuring portability and ease of deployment.
+This project implements an ETL (Extract, Transform, Load) pipeline using Apache Airflow. The pipeline is designed to extract data from various sources (PostgreSQL, MongoDB, and local files), transform the data, and load it into a MySQL database. The entire project is containerized using Docker and orchestrated with Docker Compose, ensuring a consistent and reproducible environment.
 
 ## Table of Contents
 
 - [Introduction](#introduction)
 - [Project Structure](#project-structure)
-- [ETL Pipeline Logic](#etl-pipeline-logic)
-- [Instructions for Setup and Execution](#instructions-for-setup-and-execution)
-    - [Prerequisites](#prerequisites)
-    - [Setup](#setup)
-    - [Running the Application](#running-the-application)
-    - [Testing](#testing)
-        - [Manual Testing in Airflow](#manual-testing-in-airflow)
-- [Potential Limitations](#potential-limitations)
+- [Installation and Setup](#installation-and-setup)
+- [Configuration](#configuration)
+- [Running the ETL Pipeline](#running-the-etl-pipeline)
+- [Stopping the Services](#stopping-the-services)
+- [Troubleshooting](#troubleshooting)
 
 ## Introduction
 
-This project demonstrates how to build a scalable and flexible ETL pipeline using Apache Airflow. The pipeline allows users to select which data sources to extract from and specify the target table in the MySQL database for data loading. The entire setup is orchestrated using Docker Compose, enabling seamless deployment on any system with Docker support.
+This ETL pipeline demonstrates how to build a scalable and flexible data processing system using Apache Airflow. It allows users to select which data sources to extract from and specify the target table in the MySQL database. The pipeline components include:
+
+- **Extraction**: From PostgreSQL, MongoDB, and local CSV/JSON files.
+- **Transformation**: Data cleaning, deduplication, and UUID assignment.
+- **Loading**: Inserting transformed data into MySQL.
+- **Orchestration**: Managed by Apache Airflow DAGs.
 
 ## Project Structure
 
@@ -61,179 +63,147 @@ project_root/
     - **postgres/**: PostgreSQL initialization script (`init.sql`).
 - **docker-compose.yml**: Docker Compose configuration file.
 - **.env**: Environment variables for configurations and credentials.
-- **README.md**: Detailed project documentation (this file).
+- **README.md**: Project documentation (this file).
 
-## ETL Pipeline Logic
+## Installation and Setup
 
-The ETL pipeline consists of the following steps:
+Follow these steps to set up and run the ETL pipeline:
 
-1. **Extraction**:
-    - **PostgreSQL**: Extracts data from a specified table in the PostgreSQL database.
-    - **MongoDB**: Extracts data from a specified collection in the MongoDB database.
-    - **Local File**: Reads data from a local CSV or JSON file.
-    - The data extraction from each source is optional and controlled via Airflow Variables.
-
-2. **Transformation**:
-    - Combines data from the selected sources into a single DataFrame.
-    - Performs data cleaning, such as removing duplicates.
-    - Placeholder for additional transformation logic (e.g., data normalization, aggregation).
-
-3. **Loading**:
-    - Inserts the transformed data into a specified table in the MySQL database.
-    - Supports specifying the target table via an Airflow Variable.
-
-4. **Orchestration**:
-    - Apache Airflow orchestrates the entire pipeline using a DAG (`etl_dag.py`).
-    - Users can control the execution flow by setting Airflow Variables.
-
-## Instructions for Setup and Execution
-
-### Prerequisites
-
-- **Operating System**: The project is designed to run on Windows, but it can also run on Linux or macOS.
-- **Docker Desktop**: Install Docker Desktop from [Docker's official website](https://www.docker.com/products/docker-desktop).
-    - Ensure Docker is configured to use **Linux containers**.
-    - Enable **WSL 2** backend on Windows for better performance.
-- **Git**: Install Git to clone the repository.
-
-### Setup
-
-#### Step 1: Clone the Repository
-
-Open a terminal or PowerShell and navigate to your desired directory:
+### 1. Clone the Repository
 
 ```bash
 git clone <repository_url>
 cd project_root
 ```
 
-#### Step 2: Configure Environment Variables
+### 2. Configure Environment Variables
 
-- Open the `.env` file in a text editor.
-- **Generate a Fernet Key**:
+Copy the example `.env` file and update the environment variables as needed.
 
-  In your terminal, run:
+#### Generate a Fernet Key
 
-  ```bash
-  docker run --rm apache/airflow:2.6.3 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-  ```
+Apache Airflow requires a Fernet key for encryption. Generate one using the following command:
 
-    - Copy the generated key and paste it into the `.env` file as the value for `AIRFLOW_FERNET_KEY`.
+```bash
+pip install cryptography
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
 
-- **Verify and Update Credentials**:
+Copy the generated key and set it in the `.env` file:
 
-  Ensure that all database credentials and configurations are set correctly in the `.env` file.
+```
+AIRFLOW_FERNET_KEY=your_generated_fernet_key_here
+```
 
-#### Step 3: Build and Start Services
+#### Verify and Update Credentials
 
-- **Build the Custom Airflow Image and Initialize Airflow**:
+Ensure all database credentials and hostnames are correctly set in the `.env` file.
 
-  ```bash
-  docker-compose up --build airflow_init
-  ```
+### 3. Build and Start the Docker Containers
 
-    - Wait until the initialization completes (look for "Initialization done" in the logs).
+#### Build the Custom Airflow Image
 
-- **Start All Services**:
+From the project root directory, run:
 
-  ```bash
-  docker-compose up -d
-  ```
+```bash
+docker-compose build
+```
 
-    - This starts all services in detached mode.
+#### Initialize Airflow
 
-### Running the Application
+Before starting Airflow services, initialize the Airflow database and create the admin user:
 
-#### Access the Airflow Web UI
+```bash
+docker-compose up airflow_init
+```
 
-- Open a web browser and navigate to `http://localhost:8080`.
-- Log in with:
-    - **Username**: `admin`
-    - **Password**: `admin`
+Wait until the initialization is complete. You should see a message indicating that the Airflow database has been initialized and the admin user has been created.
 
-#### Configure Airflow Variables
+#### Start All Services
 
-- In the Airflow UI, navigate to **Admin** > **Variables**.
-- Add or edit the following variables to control the pipeline:
+Now start all the services using:
+
+```bash
+docker-compose up -d
+```
+
+This command starts all containers in detached mode.
+
+## Configuration
+
+### Accessing the Airflow Web UI
+
+Open your web browser and navigate to `http://localhost:8080`.
+
+Login credentials:
+
+- **Username**: `admin`
+- **Password**: `admin`
+
+### Setting Airflow Variables
+
+In the Airflow UI:
+
+1. Navigate to **Admin** > **Variables**.
+2. Add or update the following variables to control the ETL pipeline:
 
     - **read_postgres**: `True` or `False` (default: `True`)
     - **read_mongodb**: `True` or `False` (default: `True`)
     - **read_file**: `True` or `False` (default: `False`)
-    - **target_table**: Name of the MySQL table to load data into (default: `final_table`)
+    - **postgres_source_table**: Name of the source table in PostgreSQL (default: `source_table`)
+    - **mongodb_source_collection**: Name of the source collection in MongoDB (default: `source_collection`)
+    - **target_table**: Name of the target table in MySQL (default: `final_table`)
 
-#### Trigger the ETL Pipeline DAG
+### Adjusting the Data Sources
 
-- In the Airflow UI, go to the **DAGs** view.
-- Locate the `etl_pipeline` DAG.
-- Toggle the DAG **On** if it's not already.
-- Click the **Trigger DAG** button to start a manual run.
+If you want to include data from a local file:
 
-#### Monitor the Workflow
+1. Place your CSV or JSON file in the `data/` directory.
+2. Update the `LOCAL_FILE_PATH` in the `.env` file to point to your file, e.g.:
 
-- Use the **Graph View** or **Tree View** to monitor the execution of each task.
-- Ensure that each task completes successfully.
-- View logs for each task by clicking on it and selecting **View Log**.
+    ```
+    LOCAL_FILE_PATH=/opt/airflow/data/your_file.csv
+    ```
 
-### Testing
+## Running the ETL Pipeline
 
-#### Manual Testing in Airflow
+### Trigger the DAG
 
-##### Verify Data in MySQL
+In the Airflow UI:
 
-After the DAG completes successfully, verify that data has been written to the MySQL database.
+1. Go to the **DAGs** page.
+2. Locate the `etl_pipeline` DAG.
+3. Turn on the DAG by toggling the **On/Off** switch.
+4. Manually trigger the DAG by clicking the **Trigger DAG** button.
 
-1. **Connect to the MySQL Database**:
+### Monitor the Pipeline
 
-    - Use a MySQL client (e.g., MySQL Workbench) or connect via terminal:
+Use Airflow's built-in monitoring tools:
 
-      ```bash
-      docker exec -it mysql_container mysql -u mysql_user -p
-      ```
+- **Graph View**: Visualize task dependencies.
+- **Tree View**: See the status of task runs over time.
+- **Task Logs**: Click on a task and select **Log** to view its output.
 
-      Enter the MySQL password (`mysql_password` from the `.env` file).
+## Stopping the Services
 
-2. **Run SQL Queries**:
-
-   ```sql
-   USE mysql_db;
-   SELECT * FROM final_table;
-   ```
-
-    - Verify that the data from the selected sources has been inserted into the `final_table`.
-
-##### Troubleshooting
-
-- **Task Failures**:
-
-    - Check task logs in the Airflow UI for error messages.
-    - Ensure that all services (databases, Airflow components) are running.
-
-- **Connection Issues**:
-
-    - Verify that the database credentials in the `.env` file are correct.
-    - Ensure Docker has sufficient resources allocated.
-
-### Shutting Down Services
-
-When finished, you can stop and remove containers:
+To stop and remove all containers, networks, and volumes created by Docker Compose:
 
 ```bash
-docker-compose down
+docker-compose down -v
 ```
 
-## Potential Limitations
+The `-v` flag removes the named volumes declared in the `volumes` section of the `docker-compose.yml` file, freeing up space.
 
-- **Resource Consumption**: Running multiple containers (databases, Airflow services) can consume significant system resources.
+## Troubleshooting
 
-- **Windows File System Compatibility**: On Windows, Docker's file system sharing may cause issues with volume mounts and file permissions.
+### Common Issues
 
-- **Error Handling in ETL Tasks**: While basic error handling is implemented, the ETL tasks might not handle all edge cases, such as network interruptions or corrupted data.
+- **Services Not Starting**: Ensure Docker Desktop is running and you have sufficient resources allocated (CPU, Memory).
+- **Port Conflicts**: Make sure the ports specified in `docker-compose.yml` are not being used by other applications.
+- **Database Connection Errors**: Verify that the database credentials in `.env` and Airflow Variables are correct.
+- **Airflow Variables Not Set**: Ensure you've set all the necessary Airflow Variables in the UI.
 
-- **Security Considerations**:
+### Viewing Logs
 
-    - Credentials are stored in the `.env` file, which may not be secure for production environments.
-    - The default Airflow user credentials are weak and should be changed for production use.
-
-- **Scalability**:
-
-    - The current setup is suitable for small to medium workloads. For larger datasets, performance tuning and scaling would be necessary.
+- **Container Logs**: Use `docker-compose logs service_name` to view logs for a specific service.
+- **Airflow Task Logs**: Accessible via the Airflow UI under each task instance.
