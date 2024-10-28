@@ -2,29 +2,29 @@ import os
 
 # PostgreSQL Configuration
 POSTGRES_CONFIG = {
-    'host': os.environ.get('POSTGRES_HOST', 'localhost'),
-    'port': 5432,
-    'database': os.environ.get('POSTGRES_DB'),
-    'user': os.environ.get('POSTGRES_USER'),
-    'password': os.environ.get('POSTGRES_PASSWORD'),
+    'host': os.environ.get('POSTGRES_HOST', 'postgres'),
+    'port': os.environ.get('POSTGRES_PORT', 5432),
+    'database': os.environ.get('POSTGRES_DB', 'postgres_db'),
+    'user': os.environ.get('POSTGRES_USER', 'postgres_user'),
+    'password': os.environ.get('POSTGRES_PASSWORD', 'postgres_password'),
 }
 
 # MySQL Configuration
 MYSQL_CONFIG = {
-    'host': os.environ.get('MYSQL_HOST', 'localhost'),
-    'port': 3306,
-    'database': os.environ.get('MYSQL_DATABASE'),
-    'user': os.environ.get('MYSQL_USER'),
-    'password': os.environ.get('MYSQL_PASSWORD'),
+    'host': os.environ.get('MYSQL_HOST', 'mysql'),
+    'port': os.environ.get('MYSQL_PORT', 3306),
+    'database': os.environ.get('MYSQL_DATABASE', 'mysql_db'),
+    'user': os.environ.get('MYSQL_USER', 'mysql_user'),
+    'password': os.environ.get('MYSQL_PASSWORD', 'mysql_password'),
 }
 
 # MongoDB Configuration
 MONGO_CONFIG = {
-    'host': os.environ.get('MONGO_HOST', 'localhost'),
-    'port': 27017,
-    'database': os.environ.get('MONGO_INITDB_DATABASE'),
-    'user': os.environ.get('MONGO_INITDB_ROOT_USERNAME'),
-    'password': os.environ.get('MONGO_INITDB_ROOT_PASSWORD'),
+    'host': os.environ.get('MONGO_HOST', 'mongodb'),
+    'port': os.environ.get('MONGO_PORT', 27017),
+    'database': os.environ.get('MONGO_INITDB_DATABASE', 'mongo_db'),
+    'user': os.environ.get('MONGO_INITDB_ROOT_USERNAME', 'mongo_user'),
+    'password': os.environ.get('MONGO_INITDB_ROOT_PASSWORD', 'mongo_password'),
 }
 
 # Local File Path

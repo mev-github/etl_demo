@@ -12,7 +12,6 @@ This project implements an ETL (Extract, Transform, Load) pipeline using Apache 
     - [Setup](#setup)
     - [Running the Application](#running-the-application)
     - [Testing](#testing)
-        - [Unit Tests](#unit-tests)
         - [Manual Testing in Airflow](#manual-testing-in-airflow)
 - [Potential Limitations](#potential-limitations)
 
@@ -36,8 +35,6 @@ project_root/
 │   └── etl_tasks.py
 ├── data/
 │   └── input_file.csv
-├── tests/
-│   └── test_etl_tasks.py
 ├── init/
 │   ├── mongodb/
 │   │   └── init.js
@@ -58,8 +55,6 @@ project_root/
     - **config.py**: Configuration settings and environment variables.
     - **etl_tasks.py**: ETL task functions for data extraction, transformation, and loading.
 - **data/**: Directory for local data files (e.g., `input_file.csv`).
-- **tests/**: Contains unit tests for the ETL tasks.
-    - **test_etl_tasks.py**: Unit tests using `pytest`.
 - **init/**: Initialization scripts for the databases.
     - **mongodb/**: MongoDB initialization script (`init.js`).
     - **mysql/**: MySQL initialization script (`init.sql`).
@@ -180,26 +175,6 @@ cd project_root
 - View logs for each task by clicking on it and selecting **View Log**.
 
 ### Testing
-
-#### Unit Tests
-
-The project includes unit tests for the ETL functions using `pytest`.
-
-##### Running Unit Tests
-
-1. **Install `pytest`**:
-
-   `pytest` is already included in the `airflow/requirements.txt`. Ensure the Docker image is rebuilt to include it.
-
-2. **Run Tests Inside the Airflow Webserver Container**:
-
-   ```bash
-   docker exec -it airflow_webserver bash
-   cd /opt/airflow/tests
-   pytest test_etl_tasks.py
-   ```
-
-    - This will execute all unit tests and display the results.
 
 #### Manual Testing in Airflow
 

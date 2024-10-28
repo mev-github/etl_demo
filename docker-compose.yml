@@ -71,13 +71,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow  # Add /opt/airflow/app to PYTHONPATH
+      - PYTHONPATH=/opt/airflow/app:/opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./app:/opt/airflow/app
       - ./data:/opt/airflow/data
+      - /tmp:/tmp  # Shared temporary directory
     ports:
       - "8080:8080"
     command: webserver
@@ -96,13 +97,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow  # Add /opt/airflow/app to PYTHONPATH
+      - PYTHONPATH=/opt/airflow/app:/opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./app:/opt/airflow/app
       - ./data:/opt/airflow/data
+      - /tmp:/tmp  # Shared temporary directory
     command: scheduler
 
   airflow_worker:
@@ -119,13 +121,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow  # Add /opt/airflow/app to PYTHONPATH
+      - PYTHONPATH=/opt/airflow/app:/opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./app:/opt/airflow/app
       - ./data:/opt/airflow/data
+      - /tmp:/tmp  # Shared temporary directory
     command: celery worker
 
   airflow_init:
@@ -143,16 +146,16 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow  # Add /opt/airflow/app to PYTHONPATH
+      - PYTHONPATH=/opt/airflow/app:/opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./app:/opt/airflow/app
       - ./data:/opt/airflow/data
+      - /tmp:/tmp  # Shared temporary directory
     entrypoint: /bin/bash
-    command: -c "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
-
+    command: -c "airflow db upgrade && airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
 volumes:
   postgres_data:
   mongo_data:

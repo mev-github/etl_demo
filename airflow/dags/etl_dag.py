@@ -1,9 +1,16 @@
 from datetime import datetime
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.models import Variable
 
-from app.etl_tasks import extract_postgres, extract_mongodb, extract_local_file, transform_data, load_to_mysql
+from airflow.models import Variable
+from airflow.operators.python import PythonOperator
+
+from airflow import DAG
+from app.etl_tasks import (
+    extract_postgres,
+    extract_mongodb,
+    extract_local_file,
+    transform_data,
+    load_to_mysql,
+)
 
 default_args = {
     'owner': 'airflow',
@@ -23,6 +30,7 @@ read_mongodb = Variable.get("read_mongodb", default_var="True") == "True"
 read_file = Variable.get("read_file", default_var="False") == "True"
 
 extract_tasks = []
+extract_task_ids = []
 
 if read_postgres:
     extract_postgres_task = PythonOperator(
@@ -31,6 +39,7 @@ if read_postgres:
         dag=dag,
     )
     extract_tasks.append(extract_postgres_task)
+    extract_task_ids.append('extract_postgres')
 
 if read_mongodb:
     extract_mongodb_task = PythonOperator(
@@ -39,6 +48,7 @@ if read_mongodb:
         dag=dag,
     )
     extract_tasks.append(extract_mongodb_task)
+    extract_task_ids.append('extract_mongodb')
 
 if read_file:
     extract_file_task = PythonOperator(
@@ -47,10 +57,12 @@ if read_file:
         dag=dag,
     )
     extract_tasks.append(extract_file_task)
+    extract_task_ids.append('extract_local_file')
 
 transform_task = PythonOperator(
     task_id='transform_data',
     python_callable=transform_data,
+    op_kwargs={'extract_task_ids': extract_task_ids},
     dag=dag,
 )
 
@@ -66,6 +78,7 @@ if extract_tasks:
         extract_task >> transform_task
     transform_task >> load_task
 else:
-    from airflow.operators.dummy import DummyOperator
+    from airflow.operators.dummy_operator import DummyOperator
+
     skip_task = DummyOperator(task_id='skip_task', dag=dag)
     skip_task >> load_task
