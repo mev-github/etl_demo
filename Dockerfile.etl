@@ -1,0 +1,18 @@
+# Base image for ETL code.  Both Airflow and Dagster extend from here
+# or mount the same code with matching dependencies.
+FROM docker.io/python:3.11-slim AS etl-base
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy shared ETL source
+COPY src/common /opt/etl/common
+
+# Make common importable
+ENV PYTHONPATH="/opt/etl:${PYTHONPATH}"
+
+WORKDIR /opt/etl

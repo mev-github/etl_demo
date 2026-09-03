@@ -1,0 +1,26 @@
+order_id,order_date,hotel_id,supplier_id,item_category,item_description,quantity,unit_price,is_urgent
+SO-001,2026-01-05,HTL-1,SUP-1,linens,Bath towels 600gsm white,120,4.50,false
+SO-002,2026-01-07,HTL-2,SUP-2,toiletries,Shampoo sachets 30ml,500,0.35,false
+SO-003,2026-01-08,HTL-1,SUP-3,cleaning,All-purpose surface cleaner 5L,30,8.20,false
+SO-004,2026-01-10,HTL-3,SUP-1,linens,Pillow protectors standard,80,3.10,false
+SO-005,2026-01-12,HTL-2,SUP-4,equipment,Vacuum cleaner upright,2,320.00,true
+SO-006,2026-01-14,HTL-1,SUP-2,toiletries,Body lotion bottles 50ml,400,0.55,false
+SO-007,2026-01-15,HTL-3,SUP-3,cleaning,Glass cleaner 1L spray,50,3.75,false
+SO-008,2026-01-17,HTL-2,SUP-5,food_bev,Ground coffee arabica 1kg,25,14.90,false
+SO-009,2026-01-18,HTL-1,SUP-4,equipment,Iron steam professional,3,89.00,true
+SO-010,2026-01-20,HTL-3,SUP-2,toiletries,Soap bar lavender 100g,300,0.80,false
+SO-011,2026-01-22,HTL-1,SUP-5,food_bev,Black tea bags box/100,40,6.50,false
+SO-012,2026-01-24,HTL-2,SUP-1,linens,Bed sheet fitted king,60,12.40,false
+SO-013,2026-01-25,HTL-3,SUP-3,cleaning,Bathroom descaler 2L,20,5.60,false
+SO-014,2026-01-27,HTL-1,SUP-4,equipment,Hairdryer wall-mount,5,45.00,false
+SO-015,2026-01-28,HTL-2,SUP-5,food_bev,Mineral water still 0.5L case/24,15,9.20,true
+SO-016,2026-02-01,HTL-3,SUP-1,linens,Duvet cover queen white,40,18.50,false
+SO-017,2026-02-03,HTL-1,SUP-2,toiletries,Dental kit single-use,200,0.45,false
+SO-018,2026-02-05,HTL-2,SUP-3,cleaning,Laundry detergent pods box/50,35,11.30,false
+SO-019,2026-02-07,HTL-3,SUP-4,equipment,Mini fridge 40L,1,210.00,true
+SO-020,2026-02-08,HTL-1,SUP-5,food_bev,Orange juice 1L carton,30,3.40,false
+SO-021,2026-02-10,HTL-2,SUP-1,linens,Bathmat cotton white,50,6.80,false
+SO-022,2026-02-12,HTL-3,SUP-2,toiletries,Shower cap disposable,400,0.15,false
+SO-023,2026-02-14,HTL-1,SUP-3,cleaning,Toilet cleaner gel 750ml,45,4.10,false
+SO-024,2026-02-16,HTL-2,SUP-4,equipment,Luggage rack folding,4,55.00,false
+SO-025,2026-02-18,HTL-3,SUP-5,food_bev,Instant coffee sachets box/200,20,12.60,false

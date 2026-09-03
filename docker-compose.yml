@@ -1,163 +1,329 @@
-version: '3.8'
+# =============================================================
+# docker-compose.yml -- ETL Demo 2026
+#
+# Usage:
+#   docker compose --profile airflow up -d
+#   docker compose --profile dagster  up -d
+#
+# Infrastructure services (mysql, postgres, mongodb, adminer,
+# mongo-express) start with ANY profile.
+# =============================================================
+
+x-etl-env: &etl-env
+  MYSQL_HOST: mysql
+  MYSQL_PORT: "3306"
+  MYSQL_USER: etl_user
+  MYSQL_PASSWORD: etl_pass
+  MYSQL_DATABASE: hotel_dims
+  MONGO_HOST: mongodb
+  MONGO_PORT: "27017"
+  MONGO_USER: etl_user
+  MONGO_PASSWORD: etl_pass
+  MONGO_DATABASE: hotel_enrichment
+  PG_HOST: postgres
+  PG_PORT: "5432"
+  PG_USER: etl_user
+  PG_PASSWORD: etl_pass
+  PG_DATABASE: hotel_dwh
+  PG_SCHEMA: dwh
+  PG_TARGET_TABLE: fact_hotel_operations
+  ETL_DATA_DIR: /opt/etl/data
+
+x-airflow-env: &airflow-env
+  <<: *etl-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__API_AUTH__JWT_SECRET: "etl-demo-2026-jwt-secret-not-for-production"
+  AIRFLOW__API__SECRET_KEY: "etl-demo-2026-api-secret-not-for-production"
+  AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
 
 services:
-  postgres:
-    image: postgres:latest
-    container_name: postgres_container
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init/postgres:/docker-entrypoint-initdb.d
-
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb_container
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-      - ./init/mongodb:/docker-entrypoint-initdb.d
+  # ---------------------------------------------------------------
+  # Infrastructure (always started)
+  # ---------------------------------------------------------------
 
   mysql:
-    image: mysql:latest
-    container_name: mysql_container
+    image: docker.io/library/mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_USER: etl_user
+      MYSQL_PASSWORD: etl_pass
+      MYSQL_DATABASE: hotel_dims
+    volumes:
+      - ./pregen/db/mysql_init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
       - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: etl_user
+      POSTGRES_PASSWORD: etl_pass
+      POSTGRES_DB: hotel_dwh
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init/mysql:/docker-entrypoint-initdb.d
-
-  redis:
-    image: redis:latest
-    container_name: redis_container
+      - ./pregen/db/postgres_init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
-      - "6379:6379"
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etl_user -d hotel_dwh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
-  airflow_db:
-    image: postgres:13
-    container_name: airflow_db
+  mongodb:
+    image: docker.io/library/mongo:7.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: etl_user
+      MONGO_INITDB_ROOT_PASSWORD: etl_pass
+      MONGO_INITDB_DATABASE: hotel_enrichment
+    volumes:
+      - ./pregen/db/mongo_seed.js:/docker-entrypoint-initdb.d/01-seed.js:ro
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "-u", "etl_user", "-p", "etl_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  adminer:
+    image: docker.io/library/adminer:4
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  mongo-express:
+    image: docker.io/library/mongo-express:1.0
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: etl_user
+      ME_CONFIG_MONGODB_ADMINPASSWORD: etl_pass
+      ME_CONFIG_MONGODB_URL: mongodb://etl_user:etl_pass@mongodb:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8082:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ---------------------------------------------------------------
+  # Airflow (profile: airflow)
+  # ---------------------------------------------------------------
+
+  airflow-postgres:
+    image: docker.io/library/postgres:16-alpine
+    profiles: ["airflow"]
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
-    volumes:
-      - airflow_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
-  airflow_webserver:
+  airflow-init:
     build:
-      context: ./airflow
-      dockerfile: Dockerfile
-    container_name: airflow_webserver
-    depends_on:
-      - airflow_init
+      context: .
+      dockerfile: Dockerfile.airflow
+    profiles: ["airflow"]
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - airflow db migrate
     environment:
-      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
-      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow
+      <<: *airflow-env
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+
+  airflow-api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    profiles: ["airflow"]
+    command: ["airflow", "api-server", "--port", "8080"]
+    environment:
+      <<: *airflow-env
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./app:/opt/airflow/app
-      - ./data:/opt/airflow/data
-      - /tmp:/tmp  # Shared temporary directory
+      - ./pregen/data:/opt/etl/data:ro
     ports:
       - "8080:8080"
-    command: webserver
-
-  airflow_scheduler:
-    build:
-      context: ./airflow
-      dockerfile: Dockerfile
-    container_name: airflow_scheduler
     depends_on:
-      - airflow_webserver
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
-      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./app:/opt/airflow/app
-      - ./data:/opt/airflow/data
-      - /tmp:/tmp  # Shared temporary directory
-    command: scheduler
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v2/version"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
-  airflow_worker:
+  airflow-scheduler:
     build:
-      context: ./airflow
-      dockerfile: Dockerfile
-    container_name: airflow_worker
-    depends_on:
-      - airflow_scheduler
+      context: .
+      dockerfile: Dockerfile.airflow
+    profiles: ["airflow"]
+    hostname: airflow-scheduler
+    command: ["airflow", "scheduler"]
     environment:
-      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
-      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow
+      <<: *airflow-env
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./app:/opt/airflow/app
-      - ./data:/opt/airflow/data
-      - /tmp:/tmp  # Shared temporary directory
-    command: celery worker
+      - ./pregen/data:/opt/etl/data:ro
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
+      airflow-postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
-  airflow_init:
+  airflow-dag-processor:
     build:
-      context: ./airflow
-      dockerfile: Dockerfile
-    container_name: airflow_init
-    depends_on:
-      - airflow_db
-      - redis
+      context: .
+      dockerfile: Dockerfile.airflow
+    profiles: ["airflow"]
+    command: ["airflow", "dag-processor"]
     environment:
-      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
-      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow_db:5432/airflow
-      - PYTHONPATH=/opt/airflow/app:/opt/airflow
+      <<: *airflow-env
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
-      - ./airflow/plugins:/opt/airflow/plugins
-      - ./app:/opt/airflow/app
-      - ./data:/opt/airflow/data
-      - /tmp:/tmp  # Shared temporary directory
-    entrypoint: /bin/bash
-    command: -c "airflow db upgrade && airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
-volumes:
-  postgres_data:
-  mongo_data:
-  mysql_data:
-  airflow_db:
+      - ./pregen/data:/opt/etl/data:ro
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ---------------------------------------------------------------
+  # Dagster (profile: dagster)
+  # ---------------------------------------------------------------
+
+  dagster-postgres:
+    image: docker.io/library/postgres:16-alpine
+    profiles: ["dagster"]
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    profiles: ["dagster"]
+    command: dagster-webserver -h 0.0.0.0 -p 3000 -w workspace.yaml
+    environment:
+      <<: *etl-env
+      DAGSTER_HOME: /opt/etl/dagster
+    volumes:
+      - ./pregen/data:/opt/etl/data:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    profiles: ["dagster"]
+    command: dagster-daemon run
+    environment:
+      <<: *etl-env
+      DAGSTER_HOME: /opt/etl/dagster
+    volumes:
+      - ./pregen/data:/opt/etl/data:ro
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M

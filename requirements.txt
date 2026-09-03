@@ -1,0 +1,10 @@
+pandas
+pymysql
+pymongo
+psycopg2-binary
+sqlalchemy
+apache-airflow
+apache-airflow-providers-standard
+dagster
+dagster-webserver
+dagster-postgres

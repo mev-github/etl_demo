@@ -1,0 +1,5 @@
+load_from:
+  - python_file:
+#      relative_path: assets.py
+      relative_path: etl_job.py
+      working_directory: /opt/etl/dagster

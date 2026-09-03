@@ -1,0 +1,29 @@
+{
+  "name": "ETL Demo 2026",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "pip install -r requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      }
+    }
+  },
+  "forwardPorts": [8080, 3000, 3306, 5432, 27017, 8081, 8082],
+  "portsAttributes": {
+    "8080": { "label": "Airflow UI" },
+    "3000": { "label": "Dagster UI" },
+    "3306": { "label": "MySQL" },
+    "5432": { "label": "PostgreSQL" },
+    "27017": { "label": "MongoDB" },
+    "8081": { "label": "Adminer" },
+    "8082": { "label": "Mongo Express" }
+  }
+}

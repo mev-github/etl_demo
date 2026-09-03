@@ -1,0 +1,17 @@
+FROM docker.io/python:3.11-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Shared ETL library
+COPY src/common /opt/etl/common
+
+# Dagster code + config
+COPY src/pipeline_dagster /opt/etl/dagster
+
+ENV PYTHONPATH="/opt/etl:${PYTHONPATH}"
+WORKDIR /opt/etl/dagster
