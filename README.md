@@ -69,9 +69,11 @@ All commands below use `podman compose`.  If you use Docker, replace `podman` wi
 
 ### 2.1 Clone and configure
 
+One by one:
+
 ```
-git clone <repository-url>
-cd etl-demo-2026-py
+git clone https://github.com/mev-github/etl_demo.git
+cd etl_demo
 copy .env.example .env
 ```
 
