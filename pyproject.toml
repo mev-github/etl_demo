@@ -1,0 +1,24 @@
+[project]
+name = "etl-demo-2026-py"
+version = "0.1.0"
+description = "Teaching template: multi-source ETL with Airflow and Dagster"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "pymysql",
+    "pymongo",
+    "psycopg2-binary",
+    "sqlalchemy",
+    "apache-airflow",
+    "apache-airflow-providers-standard",
+    "dagster",
+    "dagster-webserver",
+    "dagster-postgres",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

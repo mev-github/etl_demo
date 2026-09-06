@@ -1,209 +1,292 @@
-# ETL Pipeline with Apache Airflow and Docker
+# etl-demo-2026-py
 
-This project implements an ETL (Extract, Transform, Load) pipeline using Apache Airflow. The pipeline is designed to extract data from various sources (PostgreSQL, MongoDB, and local files), transform the data, and load it into a MySQL database. The entire project is containerized using Docker and orchestrated with Docker Compose, ensuring a consistent and reproducible environment.
+A template repository for a hands-on ETL lab.  It ships a working pipeline that reads from four heterogeneous sources (CSV, JSON, MySQL, MongoDB), transforms and enriches the data with pandas, and loads the result into a PostgreSQL data warehouse.  The same logical pipeline is implemented twice, once as an **Apache Airflow** DAG (task-based orchestration) and once as a set of **Dagster** assets (asset-based orchestration), so you can run both and compare the experience.
 
-## Table of Contents
+The bundled sample dataset models the **supply-side operations of a small hotel chain**: procurement orders, housekeeping logs, hotel/supplier/room dimensions, and supplier contract terms.  You will replace this dataset with your own domain assignment and adapt the transformation logic accordingly.
 
-- [Introduction](#introduction)
-- [Project Structure](#project-structure)
-- [Installation and Setup](#installation-and-setup)
-- [Configuration](#configuration)
-- [Running the ETL Pipeline](#running-the-etl-pipeline)
-- [Stopping the Services](#stopping-the-services)
-- [Troubleshooting](#troubleshooting)
+---
 
-## Introduction
+## 1. Prerequisites
 
-This ETL pipeline demonstrates how to build a scalable and flexible data processing system using Apache Airflow. It allows users to select which data sources to extract from and specify the target table in the MySQL database. The pipeline components include:
+You need a container runtime (Podman or Docker) and Git.  Everything else runs inside containers.
 
-- **Extraction**: From PostgreSQL, MongoDB, and local CSV/JSON files.
-- **Transformation**: Data cleaning, deduplication, and UUID assignment.
-- **Loading**: Inserting transformed data into MySQL.
-- **Orchestration**: Managed by Apache Airflow DAGs.
+### 1.1 Install a container runtime
 
-## Project Structure
+**Podman (recommended, free):** download Podman Desktop from https://podman-desktop.io.  During installation on Windows, it will offer to install WSL2 and set up a Podman machine automatically. Accept the defaults.  After installation, open Podman Desktop and make sure the machine is running (green indicator in the bottom-left corner).
+
+**Docker (alternative):** Docker Desktop requires a paid license for organisations above 250 employees.  If you use it, install Docker Desktop 4.20+ and enable the WSL2 backend in Settings.
+
+### 1.2 Verify your environment
+
+Open a **PowerShell** terminal (on Windows) or a regular terminal (macOS/Linux) and run each command.  All three must succeed.
 
 ```
-project_root/
-├── airflow/
-│   ├── dags/
-│   │   └── etl_dag.py
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── logs/
-│   └── plugins/
-├── app/
-│   ├── config.py
-│   └── etl_tasks.py
-├── data/
-│   └── input_file.csv
-├── init/
-│   ├── mongodb/
-│   │   └── init.js
-│   ├── mysql/
-│   │   └── init.sql
-│   └── postgres/
-│       └── init.sql
-├── docker-compose.yml
-├── .env
-└── README.md
+git --version
+```
+Expected: any version string.  If missing, install Git from https://git-scm.com.
+
+```
+podman --version
+```
+Expected: `podman version 4.x` or higher.  If you use Docker instead, substitute `docker` for `podman` in every command throughout this document.
+
+```
+podman compose version
+```
+Expected: a version string.  If you get "unknown command", install `podman-compose` (`pip install podman-compose`) or, for Docker users, make sure the Compose V2 plugin is present (`docker compose version`, not the legacy `docker-compose`).
+
+**Windows users only:** confirm WSL2 is active:
+```
+wsl --status
+```
+Expected: output mentioning "Default Version: 2".  If WSL2 is missing, run `wsl --install` from an elevated PowerShell and reboot.
+
+### 1.3 Minimum resources
+
+| Platform       | RAM (free) | CPU cores | Disk   |
+|----------------|-----------|-----------|--------|
+| Windows 10/11  | 8 GB      | 4         | 10 GB  |
+| macOS          | 8 GB      | 4         | 10 GB  |
+| Linux          | 6 GB      | 4         | 10 GB  |
+
+On Windows and macOS the container runtime runs inside a VM, which adds memory overhead compared to native Linux.
+
+### 1.4 Platform notes
+
+**Windows 10/11 (build 19041+):** WSL2 is required for both Podman and Docker.  Use Compose V2 (`podman compose` or `docker compose`), not the legacy standalone `docker-compose` v1 binary.
+
+**macOS (12 Monterey+, Apple Silicon and Intel):** Podman Desktop, Docker Desktop 4.20+, or OrbStack all work.
+
+**Linux (Ubuntu 22.04+, Fedora 38+):** Podman 4.4+ with podman-compose, or Docker Engine 24+.
+
+**Windows without WSL2:** if you cannot or do not want to install WSL2 manually, open this repository in VS Code with the Dev Containers extension.  The included `.devcontainer/devcontainer.json` provides a Linux environment with Docker-in-Docker.
+
+---
+
+## 2. Quick start
+
+All commands below use `podman compose`.  If you use Docker, replace `podman` with `docker`.
+
+### 2.1 Clone and configure
+
+One by one:
+
+```
+git clone https://github.com/mev-github/etl_demo.git
+cd etl_demo
+copy .env.example .env
 ```
 
-- **airflow/**: Contains Airflow DAGs, Dockerfile, and requirements.
-    - **dags/**: The Airflow DAG definition (`etl_dag.py`).
-    - **Dockerfile**: Custom Dockerfile to include necessary Python packages.
-    - **requirements.txt**: Python dependencies for the Airflow environment.
-- **app/**: Contains the ETL task functions and configurations.
-    - **config.py**: Configuration settings and environment variables.
-    - **etl_tasks.py**: ETL task functions for data extraction, transformation, and loading.
-- **data/**: Directory for local data files (e.g., `input_file.csv`).
-- **init/**: Initialization scripts for the databases.
-    - **mongodb/**: MongoDB initialization script (`init.js`).
-    - **mysql/**: MySQL initialization script (`init.sql`).
-    - **postgres/**: PostgreSQL initialization script (`init.sql`).
-- **docker-compose.yml**: Docker Compose configuration file.
-- **.env**: Environment variables for configurations and credentials.
-- **README.md**: Project documentation (this file).
+On macOS/Linux use `cp` instead of `copy`.
 
-## Installation and Setup
+Generate a Fernet key and paste it into `.env` as the value of `AIRFLOW__CORE__FERNET_KEY`. Run this in your terminal:
 
-Follow these steps to set up and run the ETL pipeline:
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository_url>
-cd project_root
 ```
-
-### 2. Configure Environment Variables
-
-Copy the example `.env` file and update the environment variables as needed.
-
-#### Generate a Fernet Key
-
-Apache Airflow requires a Fernet key for encryption. Generate one using the following command:
-
-```bash
-pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Copy the generated key and set it in the `.env` file:
+If `cryptography` is not installed locally, use:
 
 ```
-AIRFLOW_FERNET_KEY=your_generated_fernet_key_here
+python -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
 ```
 
-#### Verify and Update Credentials
+Open `.env` in any text editor and paste the generated string after the `=` sign on the `AIRFLOW__CORE__FERNET_KEY` line.
 
-Ensure all database credentials and hostnames are correctly set in the `.env` file.
+### 2.2 Option A: run with Airflow
 
-### 3. Build and Start the Docker Containers
-
-#### Build the Custom Airflow Image
-
-From the project root directory, run:
-
-```bash
-docker-compose build
+```
+podman compose --profile airflow up -d --build
 ```
 
-#### Initialize Airflow
+Wait for all containers to become healthy.  Check status with:
 
-Before starting Airflow services, initialize the Airflow database and create the admin user:
-
-```bash
-docker-compose up airflow_init
+```
+podman compose ps
 ```
 
-Wait until the initialization is complete. You should see a message indicating that the Airflow database has been initialized and the admin user has been created.
+When all services show "healthy" or "running", open **http://localhost:8080** in your browser.  Authentication is disabled, so you go straight to the dashboard.  Find the `hotel_supply_etl` DAG in the list, unpause it (toggle on the left), and trigger a manual run via the "play" button.
 
-#### Start All Services
+### 2.3 Option B: run with Dagster
 
-Now start all the services using:
-
-```bash
-docker-compose up -d
+```
+podman compose --profile dagster up -d --build
 ```
 
-This command starts all containers in detached mode.
+Check status with `podman compose ps`, then open **http://localhost:3000**.  Navigate to the asset graph, select all assets, and click **Materialize all**.
 
-## Configuration
+### 2.4 Shutting down
 
-### Accessing the Airflow Web UI
-
-Open your web browser and navigate to `http://localhost:8080`.
-
-Login credentials:
-
-- **Username**: `admin`
-- **Password**: `admin`
-
-### Setting Airflow Variables
-
-In the Airflow UI:
-
-1. Navigate to **Admin** > **Variables**.
-2. Add or update the following variables to control the ETL pipeline:
-
-    - **read_postgres**: `True` or `False` (default: `True`)
-    - **read_mongodb**: `True` or `False` (default: `True`)
-    - **read_file**: `True` or `False` (default: `False`)
-    - **postgres_source_table**: Name of the source table in PostgreSQL (default: `source_table`)
-    - **mongodb_source_collection**: Name of the source collection in MongoDB (default: `source_collection`)
-    - **target_table**: Name of the target table in MySQL (default: `final_table`)
-
-### Adjusting the Data Sources
-
-If you want to include data from a local file:
-
-1. Place your CSV or JSON file in the `data/` directory.
-2. Update the `LOCAL_FILE_PATH` in the `.env` file to point to your file, e.g.:
-
-    ```
-    LOCAL_FILE_PATH=/opt/airflow/data/your_file.csv
-    ```
-
-## Running the ETL Pipeline
-
-### Trigger the DAG
-
-In the Airflow UI:
-
-1. Go to the **DAGs** page.
-2. Locate the `etl_pipeline` DAG.
-3. Turn on the DAG by toggling the **On/Off** switch.
-4. Manually trigger the DAG by clicking the **Trigger DAG** button.
-
-### Monitor the Pipeline
-
-Use Airflow's built-in monitoring tools:
-
-- **Graph View**: Visualize task dependencies.
-- **Tree View**: See the status of task runs over time.
-- **Task Logs**: Click on a task and select **Log** to view its output.
-
-## Stopping the Services
-
-To stop and remove all containers, networks, and volumes created by Docker Compose:
-
-```bash
-docker-compose down -v
+```
+podman compose --profile airflow down -v
 ```
 
-The `-v` flag removes the named volumes declared in the `volumes` section of the `docker-compose.yml` file, freeing up space.
+Replace `airflow` with `dagster` if you ran that profile.  The `-v` flag removes named volumes so the next run starts from a clean state.
 
-## Troubleshooting
+---
 
-### Common Issues
+## 3. Port reference
 
-- **Services Not Starting**: Ensure Docker Desktop is running and you have sufficient resources allocated (CPU, Memory).
-- **Port Conflicts**: Make sure the ports specified in `docker-compose.yml` are not being used by other applications.
-- **Database Connection Errors**: Verify that the database credentials in `.env` and Airflow Variables are correct.
-- **Airflow Variables Not Set**: Ensure you've set all the necessary Airflow Variables in the UI.
+| Service        | URL / Port              | Notes |
+|----------------|-------------------------|-------|
+| Airflow UI     | http://localhost:8080   | Profile `airflow`. No login required |
+| Dagster UI     | http://localhost:3000   | Profile `dagster` |
+| Adminer        | http://localhost:8081   | Web UI for MySQL and PostgreSQL |
+| Mongo Express  | http://localhost:8082   | Web UI for MongoDB |
+| MySQL          | localhost:3306          | User: etl_user / etl_pass |
+| PostgreSQL     | localhost:5432          | User: etl_user / etl_pass, DB: hotel_dwh |
+| MongoDB        | localhost:27017         | User: etl_user / etl_pass |
 
-### Viewing Logs
+**Connecting from Adminer:** Adminer runs inside Docker, so you must use container service names, not `localhost`.  In the "Server" field enter `mysql` for MySQL or `postgres` for PostgreSQL.  Username `etl_user`, password `etl_pass`.
 
-- **Container Logs**: Use `docker-compose logs service_name` to view logs for a specific service.
-- **Airflow Task Logs**: Accessible via the Airflow UI under each task instance.
+---
+
+## 4. IDE setup
+
+The ETL source code lives in `src/`.  Your IDE does not know this automatically, so you must mark it as a source root manually.  Without this step, imports like `from common.extract import ...` will show as unresolved errors.
+
+**PyCharm / IntelliJ IDEA with Python plugin:**
+Right-click the `src` folder in the Project tool window, then select **Mark Directory as > Sources Root**.  The folder icon turns blue.
+
+**VS Code:**
+Add this to your workspace `.vscode/settings.json`:
+```json
+{
+  "python.analysis.extraPaths": ["src"],
+  "python.autoComplete.extraPaths": ["src"]
+}
+```
+
+After marking the source root, install the project dependencies into your local interpreter if you want full autocompletion and type checking:
+
+```
+pip install -e .
+```
+
+This uses `pyproject.toml` to install the `common` package in editable mode.  This step is optional since all code runs inside containers, not on your host, but it makes the IDE experience much better.
+
+---
+
+## 5. Repository structure
+
+```
+etl-demo-2026-py/
+├── docker-compose.yml           # profiles: airflow, dagster
+├── Dockerfile.airflow           # Airflow image with ETL deps
+├── Dockerfile.dagster           # Dagster image with ETL deps
+├── Dockerfile.etl               # (optional) standalone ETL base
+├── pyproject.toml               # editable install for local dev
+├── .devcontainer/               # VS Code Dev Container for Windows
+├── .env.example
+├── .gitignore
+├── requirements.txt             # Python deps for the ETL code
+├── README.md
+├── pregen/
+│   ├── data/
+│   │   ├── supply_orders.csv    # Fact: procurement orders
+│   │   └── housekeeping_log.json# Fact: housekeeping events
+│   └── db/
+│       ├── mysql_init.sql       # Dimension tables + seed data
+│       ├── postgres_init.sql    # Target warehouse DDL
+│       └── mongo_seed.js        # Supplier contract documents
+└── src/
+    ├── common/                  # Shared ETL logic (both orchestrators use this)
+    │   ├── __init__.py
+    │   ├── config.py            # Connection settings from env vars
+    │   ├── extract.py           # Read from CSV, JSON, MySQL, MongoDB
+    │   ├── transform.py         # Join, enrich, classify, add metadata
+    │   └── load.py              # Write to PostgreSQL
+    ├── pipeline_airflow/        # named to avoid shadowing the airflow package
+    │   └── dags/
+    │       └── hotel_supply_etl.py   # Airflow DAG definition
+    └── pipeline_dagster/        # named to avoid shadowing the dagster package
+        ├── assets.py            # Dagster asset definitions
+        ├── workspace.yaml       # Dagster code location config
+        └── dagster.yaml         # Dagster instance config
+```
+
+---
+
+## 6. Where to make changes (student tasks)
+
+Your primary editing targets are in `src/common/transform.py`:
+
+1. **`apply_business_logic(df)`** receives a DataFrame after the join step.  Add your domain-specific calculations, derivations, and enrichment here.  The default implementation computes a discounted price for supply orders; replace it with logic that fits your assigned domain.
+
+2. **`classify_event_type(row, source)`** returns the `event_type` string stamped on every output row.  Define meaningful categories for your data (e.g. `"booking_created"`, `"maintenance_urgent"`).
+
+3. **`pregen/data/`** -- replace `supply_orders.csv` and `housekeeping_log.json` with your own source files.  Keep at least two files with different formats (CSV and JSON) to preserve the multi-source nature of the exercise.
+
+4. **`pregen/db/mysql_init.sql`** -- redefine the dimension tables for your domain.
+
+5. **`pregen/db/mongo_seed.js`** -- replace the supplier contracts with enrichment documents relevant to your domain.
+
+6. **`pregen/db/postgres_init.sql`** -- update the target table DDL.  Keep the three mandatory metadata columns (`batch_id`, `batch_ts`, `event_type`) and add your own domain columns.
+
+After replacing the dataset, update `src/common/extract.py` if your filenames or MySQL table names differ, and adjust the join logic in the private helper functions `_join_supply_orders` and `_join_housekeeping` inside `transform.py`.
+
+---
+
+## 7. Mandatory metadata columns
+
+Every student's final table must include these three columns regardless of domain:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `batch_id` | `VARCHAR(64)` | UUID generated at the start of each pipeline run |
+| `batch_ts` | `TIMESTAMP WITH TIME ZONE` | Timestamp of the pipeline run |
+| `event_type` | `VARCHAR(60)` | Domain-specific row classification, set in `classify_event_type()` |
+
+These are added automatically by `build_fact_table()` in `transform.py`.  Do not remove them.
+
+---
+
+## 8. Airflow vs Dagster: what to compare
+
+The same ETL logic runs under two orchestration models.  Here is what to pay attention to when you run both.
+
+**Airflow (task-based):**
+The pipeline is a DAG of tasks.  Each task is an explicit operation ("extract CSV", "transform", "load").  Data flows between tasks through XCom, a key-value sidecar store.  You define execution order with `>>` operators.  The Airflow UI shows task status, duration, and logs per task.  The mental model is "what steps run in what order."
+
+**Dagster (asset-based):**
+The pipeline is a graph of assets.  Each asset is a named data product ("supply_orders", "fact_hotel_operations").  Dependencies are declared implicitly: if an asset function takes `supply_orders` as a parameter, Dagster knows it depends on the `supply_orders` asset.  The Dagster UI shows the asset lineage graph and materialisation history.  The mental model is "what data exists and where did it come from."
+
+Points to note in your lab report:
+
+- How is the dependency graph expressed in each system?
+- Where does intermediate data live (XCom vs in-process DataFrames)?
+- What happens when a single step fails?  How do you re-run just that step?
+- Which UI gives you better visibility into data lineage?
+- Which approach feels more natural for this pipeline's structure?
+
+---
+
+## 9. Troubleshooting
+
+**"The system cannot find the file specified" or connection refused on Windows:** the Podman machine (or Docker Desktop engine) is not running.  Open Podman Desktop (or Docker Desktop) and start the engine, then retry.
+
+**"unable to retrieve auth token", "invalid username/password", or "unauthorized" when pulling/building images:** the container runtime is sending stale or missing credentials to Docker Hub.  This is common when Podman inherits a credential store entry left by a previous Docker Desktop installation, or when Docker Hub rate-limits anonymous pulls.
+
+Fix for Podman:
+```
+podman logout docker.io
+podman login docker.io
+```
+
+Fix for Docker:
+```
+docker logout docker.io
+docker login docker.io
+```
+
+Enter your Docker Hub username and password (a free account is sufficient).  If you do not have an account, create one at https://hub.docker.com.  On Windows, Podman stores credentials in `%APPDATA%\containers\auth.json`; if the logout command does not help, open that file and delete the `docker.io` key manually, then run `podman login docker.io` again.
+
+**Containers fail to start:** run `podman compose ps` and check which service is unhealthy.  Then `podman compose logs <service>` for details.  The most common cause is a port conflict (another process already listening on 3306, 5432, etc.).
+
+**Airflow DAG not visible:** the scheduler needs 30-60 seconds to parse new DAGs after startup.  Check `podman compose logs airflow-scheduler` for import errors.
+
+**MongoDB seed not applied:** the `docker-entrypoint-initdb.d` scripts only run on a fresh volume.  If you changed `mongo_seed.js` after the first run, tear down volumes with `podman compose down -v` and rebuild.
+
+**Out of memory:** reduce memory limits in `docker-compose.yml` or close other applications.  The Airflow profile needs roughly 4 GB total across all containers; Dagster needs roughly 3 GB.
+
+**Podman compose hangs or fails with "unknown flag":** make sure you have podman-compose installed (`pip install podman-compose`).  Some older Podman versions bundle a different compose wrapper.  `podman compose version` should print a version string without errors.

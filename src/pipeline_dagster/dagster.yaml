@@ -1,0 +1,18 @@
+# dagster.yaml -- Dagster instance configuration
+# Stores run metadata and event logs in a dedicated PostgreSQL database.
+
+storage:
+  postgres:
+    postgres_db:
+      hostname: dagster-postgres
+      port: 5432
+      username: dagster
+      password: dagster
+      db_name: dagster
+
+run_launcher:
+  module: dagster.core.launcher
+  class: DefaultRunLauncher
+
+telemetry:
+  enabled: false
